@@ -1,0 +1,40 @@
+name: Restrict PR File Changes
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-files:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check changed files
+        id: check
+        run: |
+          git fetch origin ${{ github.base_ref }}
+
+          files=$(git diff --name-only origin/${{ github.base_ref }})
+
+          allowed_file="ADDITIONS.md"
+
+          for file in $files; do
+            if [ "$file" != "$allowed_file" ]; then
+              echo "❌ Only $allowed_file can be modified in this PR."
+              exit 1
+            fi
+          done
+
+          echo "allowed=true" >> $GITHUB_OUTPUT
+
+      - name: Auto merge PR
+        if: steps.check.outputs.allowed == 'true'
+        run: gh pr merge ${{ github.event.pull_request.number }} --squash --admin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
